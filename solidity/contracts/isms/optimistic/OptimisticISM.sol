@@ -7,6 +7,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 // ============ Internal Imports ============
 import {MessageIdMultisigIsmMetadata} from "../../libs/isms/MessageIdMultisigIsmMetadata.sol";
+import {CheckpointLib} from "../../libs/CheckpointLib.sol";
 import {Message} from "../../libs/Message.sol";
 import {IInterchainSecurityModule} from "../../interfaces/IInterchainSecurityModule.sol";
 import {IOptimisticIsm} from "../../interfaces/isms/IOptimisticIsm.sol";
@@ -66,9 +67,10 @@ abstract contract OptimisticIsm is IOptimisticIsm, AccessControl {
 
     // ============ Public Functions ============
 
-    constructor(uint256 _compromisedWatcherCount) {
+    constructor(uint256 _compromisedWatcherCount, uint256 _fraudWindow) {
         owner = msg.sender;
         compromisedWatcherCount = _compromisedWatcherCount;
+        fraudWindow = _fraudWindow;
         _grantRole(OWNER_ROLE, msg.sender);
     }
 
@@ -96,7 +98,10 @@ abstract contract OptimisticIsm is IOptimisticIsm, AccessControl {
         returns (bool)
     {
         require(
-            IInterchainSecurityModule(submoduleAddress).verify(message),
+            IInterchainSecurityModule(submoduleAddress).verify(
+                _metadata,
+                _message
+            ),
             "Message was not verified"
         );
 
@@ -112,11 +117,11 @@ abstract contract OptimisticIsm is IOptimisticIsm, AccessControl {
 
     function markCompromised(address _submodule) external onlyWatchers {
         require(
-            watcherSubmoduleFlag[submodule][msg.sender] == false,
+            watcherSubmoduleFlag[_submodule][msg.sender] == false,
             "Watcher already flagged that submodule"
         );
-        watcherSubmoduleFlag[submodule][msg.sender] = true;
-        submoduleFlagCount[submodule] += 1;
+        watcherSubmoduleFlag[_submodule][msg.sender] = true;
+        submoduleFlagCount[_submodule] += 1;
     }
 
     function submodule(bytes calldata _message)
@@ -127,12 +132,6 @@ abstract contract OptimisticIsm is IOptimisticIsm, AccessControl {
         return IInterchainSecurityModule(submoduleAddress);
     }
 
-    /**
-     * @notice Requires that m-of-n validators verify a merkle root,
-     * and verifies a me∑rkle proof of `_message` against that root.
-     * @param _metadata ABI encoded module metadata
-     * @param _message Formatted Hyperlane message (see Message.sol).
-     */
     function verify(bytes calldata _metadata, bytes calldata _message)
         external
         view
@@ -151,7 +150,7 @@ abstract contract OptimisticIsm is IOptimisticIsm, AccessControl {
         // We check threshold was elapsed
         require(
             preverifiedTimestamp > 0 &&
-                blockTimestamp > preverifiedTimestamp + fraudWindow,
+                block.timestamp > preverifiedTimestamp + fraudWindow,
             "Fraud window is not elapsed"
         );
 

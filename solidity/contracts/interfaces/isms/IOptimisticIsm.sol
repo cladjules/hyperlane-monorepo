@@ -26,7 +26,7 @@ interface IOptimisticIsm is IInterchainSecurityModule {
     /**
      * @notice Called by a watcher when the message is marked as compromised
      * @dev Can be called by registered watchers
-     * @param _submodule The ID of the message to mark as fraudulent.
+     * @param _id The ID of the message to mark as fraudulent.
      */
     function markFraudulent(bytes32 _id) external;
 
@@ -40,4 +40,15 @@ interface IOptimisticIsm is IInterchainSecurityModule {
         external
         view
         returns (IInterchainSecurityModule);
+
+    /**
+     * @notice Requires that m-of-n validators verify a merkle root,
+     * and verifies a me∑rkle proof of `_message` against that root.
+     * @param _metadata ABI encoded module metadata
+     * @param _message Formatted Hyperlane message (see Message.sol).
+     */
+    function verify(bytes calldata _metadata, bytes calldata _message)
+        external
+        view
+        returns (bool);
 }
